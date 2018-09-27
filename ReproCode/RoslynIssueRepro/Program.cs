@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,14 +13,14 @@ namespace RoslynIssueRepro
     {
         static async Task Main()
         {
-            MSBuildLocator.RegisterDefaults();
+            var vsinstance = MSBuildLocator.RegisterDefaults();
 
-            DeleteReferencedLibDebugBinary();
+            CleanInspectedProjectInDebug(vsinstance.MSBuildPath);
+            BuildInspectedProjectInRelease(vsinstance.MSBuildPath);
 
             var properties = new Dictionary<string, string>
             {
-                { "Configuration", "Release" },
-                { "Platform", "AnyCPU" }
+                { "Configuration", "Release" }
             };
 
             using (var workspace = MSBuildWorkspace.Create(properties))
@@ -56,15 +57,30 @@ namespace RoslynIssueRepro
             Console.ReadKey();
         }
 
-        private static void DeleteReferencedLibDebugBinary()
+        private static void CleanInspectedProjectInDebug(string msBuildPath)
         {
-            var solutionDir = GetInspectedSolutionDirectory();
-            var binaryPath = Path.Combine(solutionDir, @"ReferencedLibrary\bin\Debug\netstandard2.0\ReferencedLibrary.dll");
+            var msBuildExe = Path.Combine(msBuildPath, "MSBuild.exe");
 
-            if (File.Exists(binaryPath))
-            {
-                File.Delete(binaryPath);
-            }
+            var psi = new ProcessStartInfo(msBuildExe);
+            psi.WorkingDirectory = GetInspectedSolutionDirectory();
+            psi.Arguments = "InspectedSolution.sln /t:Clean /p:Configuration=Debug";
+
+            var process = Process.Start(psi);
+
+            process.WaitForExit();
+        }
+
+        private static void BuildInspectedProjectInRelease(string msBuildPath)
+        {
+            var msBuildExe = Path.Combine(msBuildPath, "MSBuild.exe");
+
+            var psi = new ProcessStartInfo(msBuildExe);
+            psi.WorkingDirectory = GetInspectedSolutionDirectory();
+            psi.Arguments = "InspectedSolution.sln /t:Build /p:Configuration=Release";
+
+            var process = Process.Start(psi);
+
+            process.WaitForExit();
         }
 
         private static string GetInspectedProjectPath()
